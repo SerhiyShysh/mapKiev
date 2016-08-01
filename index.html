@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>kiev route asdasdfasdf</title>
+    <link href="https://google-developers.appspot.com/maps/documentation/javascript/examples/default.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="style.css" />
+    <script type="text/javascript" src="jquery.js"></script> 
+    <script src="https://maps.googleapis.com/maps/api/js?sensor=false&language=ru"></script>
+    <script src="routes20m.js"></script>
+    <script src="routes_wiki.js"></script>
+    <script>
+		
+		// profile
+		/*var PFR = 	{
+						hav:0,
+						cpol:0,
+						pis:0,
+						pic:0,
+						sci:0
+					}*/
+		
+		/// genarete random colors
+		var hex;
+		  function ranhex(){return Math.floor(Math.random()*16); }
+		  function rcol() { var col=""; col = col.concat("#", hex[ranhex()], hex[ranhex()], hex[ranhex()]); return col; }
+		/////
+
+      var rendererOptions = {
+        draggable: true
+      };
+      var directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
+      //var directionsService = new google.maps.DirectionsService();
+      var map;
+      
+
+      
+      var geocoder;
+
+
+      var kiev = new google.maps.LatLng(50.4501, 30.523400000000038);
+
+      function initialize() {
+		  
+		  
+		  hex = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"];
+
+
+		geocoder = new google.maps.Geocoder();
+        var mapOptions = {
+          zoom: 11,
+          mapTypeId: google.maps.MapTypeId.ROADMAP,
+          center: kiev
+        };
+        map = new google.maps.Map(getById('map_canvas'), mapOptions);
+        directionsDisplay.setMap(map);
+        directionsDisplay.setPanel(getById('directionsPanel'));
+
+
+		pabeg();
+
+      }
+
+
+      
+      ///////////////////////////////
+      ///  routes
+      ///////////////////////////////
+  
+  
+  //// can DIE!!!!! array overflow
+     
+function MVContainer(_key_func)
+{
+	this.mvitems = new Object();
+	this.key_func = _key_func;
+	
+	
+	
+	this.add = function(_m, _v) // true ok/ false --such key present
+	{
+		if(this.mvitems[this.key_func(_m)] != null) return false;
+		
+		_m.setContainer(this);
+		
+		this.mvitems[this.key_func(_m)] = {model: _m, view: _v};
+		
+		return true;
+	}
+	
+	this.in = function(_m, _v)
+	{
+		return this.mvitems[this.key_func(_m)] != null
+	}
+	
+	this.remove = function(_m) // for self removing
+	{
+		this.mvitems[this.key_func(_m)] = null;
+	}
+	
+	this.getModelArray = function()
+	{
+		var res = [];
+		for(var item in this.mvitems)
+		{
+			if(this.mvitems[item] != null)
+			{
+				res.push(this.mvitems[item].model);
+			}
+		}
+		return res;
+	}
+	
+	this.getModel = function(_key)
+	{
+		var m = this.mvitems[_key]; 
+		return (m != null)?(m.model):(null);
+	}
+	
+	this.forEachModel = function(func, arg)
+	{
+		for(var item in this.mvitems)
+		{
+			if(this.mvitems[item] != null)
+			{
+				func(this.mvitems[item].model, arg);
+			}
+		}	
+	}
+	
+}
+
+
+function Route(_name, _points, _color)      
+{
+	
+	//// m0del-view stuff
+	this.listeners = [];
+	
+	this.container;
+	
+	this.setContainer = function(cont)
+	{
+		this.container = cont;
+	}
+	
+	this.addListener = function(lnr)
+	{
+		this.listeners.push(lnr);
+	}
+	
+	this.cleanupListeners = function()
+	{
+		for(var i = 0 ; i < this.listeners.length; i++)
+		{
+			this.listeners[i].cleanup();
+		}
+		this.listeners = [];
+	}
+	
+	this.notifyAll = function()
+	{
+		for(var i = 0 ; i < this.listeners.length; i++)
+		{
+			this.listeners[i].notification();
+		}
+	}	
+	
+	
+	
+	this.setName = function(_name)
+	{
+		this.name = _name;
+		this.notifyAll();
+	}
+	
+	this.setVisible = function(_visible)
+	{
+		this.visible = _visible;
+		this.renderRoute();
+		this.notifyAll();
+	}
+	
+	this.setSelected = function(_selected)
+	{
+		this.selected = _selected;
+		this.notifyAll();
+	}
+	
+	this.toggleVisible = function()
+	{
+		this.visible = !(this.visible);
+		this.renderRoute();
+		this.notifyAll();
+	}
+	
+	this.toggleSelected = function()
+	{
+		this.selected = !(this.selected);
+		this.notifyAll();
+	}
+	
+	this.cleanup = function()
+	{
+		// clear all 
+		cleanupListeners();
+		
+		if(this.container != null) this.container.remove(this);
+		
+		if(this.plpath != null) this.plpath.setMap(null);
+		this.endDrawing();
+	}
+	
+	////
+
+	
+	this.name = (_name != null)?(_name):("nameeee"),
+	this.description = "descrrrrr",
+	this.points = (_points != null)?(_points):(new Array()), // latlng
+	this.selected = true,
+	this.visible = true,
+	
+	this.color = (_color != null)?(_color):("#FF0000"),
+	
+	this.plpath = null,
+	this.routeListener,
+	this.drawstarted = false;
+
+	this.infowindow;
+	
+	this.isVisible = function()
+	{
+		return this.visible;
+	}
+	
+	this.isSelected = function()
+	{
+		return this.selected;
+	}
+	
+	this.isSelectedByUser = function()
+	{
+		return (this.infowindow != null) && (this.infowindow.getMap() != null);
+	}
+	
+	this.showHint = function(arg)
+	{
+		if((this.infowindow!=null) && (this.infowindow.getMap() != null)) 
+		{
+			this.infowindow.open(null);
+			this.notifyAll();
+			return;
+		}
+		
+		
+		var ll = ((arg!=null) && (arg.larLng != null))?(arg.larLng):(new google.maps.LatLng(this.points[0].Xa, this.points[0].Ya));
+		
+			var str = "<b>".concat(this.name,"</b>");
+		
+			this.infowindow = new google.maps.InfoWindow({
+				content: str,
+				position: ll
+			});
+			this.infowindow.open(map);
+		this.notifyAll();
+	}
+	
+	
+	this.renderRoute = function()
+	{		
+		if(this.plpath != null) this.plpath.setMap(null);
+		
+		if(!this.visible) return;
+		
+		if(this.points.length < 2) return;
+		this.plpath = new google.maps.Polyline({
+			path: this.points,
+			strokeColor: this.color,
+			strokeOpacity: 0.5,
+			strokeWeight: 7.5
+		});
+		this.plpath.setMap(map);
+		
+		google.maps.event.addListener(this.plpath, 'click', $.proxy(this, 'showHint'));
+	} 
+	
+	this.addPoint = function(point)
+	{
+		this.points.push(point);
+	}
+	
+	this.activeRouteAddPoint = function(point)
+	{
+		this.addPoint(point.latLng);
+		this.renderRoute();
+	}
+	
+	this.startDrawing = function()
+	{
+		this.routeListener = google.maps.event.addListener(map, 'click', $.proxy(this,"activeRouteAddPoint"));
+		this.drawstarted = true;
+	}
+	
+	this.endDrawing = function()
+	{
+		if(this.routeListener != null) google.maps.event.removeListener(this.routeListener);
+		this.routeListener = null;
+		this.drawstarted = false;
+	}
+	
+	this.removeLastPoint = function()
+	{
+		this.points.pop();
+		this.renderRoute();
+	}
+}
+      
+    
+      
+function RouteView(_route)
+{
+	this.route = _route;
+	
+	_route.addListener(this);
+	
+	
+	this.cleanup = function()
+	{
+		this.node.parentNode.removeChild(this.node);
+	}
+	
+	this.notification = function()
+	{
+		this.update();
+	}
+	
+	
+	this.toggleVisible = function()
+	{
+		this.route.toggleVisible();
+	}
+	
+	this.toggleSelected = function()
+	{
+		this.route.toggleSelected();
+	}
+	
+	this.showHint = function()
+	{
+		this.route.showHint();
+	}
+		
+	this.node = new wImgCheckButton(	this.route.name,
+	
+										$.proxy(this, 'toggleSelected'),
+									
+										$.proxy(this, 'toggleVisible'),
+									
+										$.proxy(this, 'showHint'), 
+										
+										(this.route.isSelected())?("check.png"):("notcheck.png"),
+										
+										(this.route.isVisible())?("visible.png"):("invisible.png"));
+										
+	this.update = function()
+	{
+		this.node.img1.src = (this.route.isSelected())?("check.png"):("notcheck.png");
+		this.node.img2.src = (this.route.isVisible())?("visible.png"):("invisible.png");
+		this.node.getNode().className = (this.route.isSelectedByUser())?("userselected"):(null);
+	}							
+}
+///////////////////////////
+///// addresses
+///////////////////////////
+
+//////////////////
+///// circle-segment intersection
+//////////////////
+
+
+
+function isInRange(x , y, a)
+{
+	return ((Math.max(x,y) >= a)&&(Math.min(x,y) <= a));
+}
+
+
+function pointInSegment(start, end, testpoint) // latLng
+{
+	
+	return ((isInRange(start.Xa, end.Xa, testpoint.Xa)) && ((isInRange(start.Ya, end.Ya, testpoint.Ya))));
+}
+
+function pointInCircle(radius, center, testpoint)
+{
+
+	return (haversine2(center, testpoint) <= radius);
+}
+
+
+function sqr(x)
+{
+	return x*x;
+}
+
+function haversine(A , B)
+{
+
+	
+	var lat1 = A.Xa*0.017453292519943295; // to radians
+	var lat2 = B.Xa*0.017453292519943295;
+	var lon1 = A.Ya*0.017453292519943295;
+	var lon2 = B.Ya*0.017453292519943295;
+	
+	
+	return Math.acos(Math.sin(lat1)*Math.sin(lat2) + 
+                 Math.cos(lat1)*Math.cos(lat2) *
+                  Math.cos(lon2-lon1)) * 6371000;
+		
+		
+	/// 
+	/// x  180167.30515044887   avg = 179972.03522501866    m / grad  (approx. for kiev region)
+	///    179776.76529958844
+	/// y  43730.73611388686
+	///
+
+	//var dx = 179972.03522501866 * (B.Xa - A.Xa);
+	//var dy = 43730.73611388686 * (B.Ya - A.Ya);
+	//	return Math.sqrt(dx*dx + dy*dy);
+
+		
+	//var Rx2 = 12742000; // Radius of the earth in km
+	//var dLat05 = (lat2-lat1) * 0.5;  // Javascript functions in radians
+	//var dLon05 = (lon2-lon1) * 0.5; 
+	//var a =  sqr( Math.sin(dLat05) ) +
+    //    Math.cos(lat1) * Math.cos(lat2) * 
+    //    sqr( Math.sin(dLon05) ); 
+	//var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+	//return 12742000 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); // Distance in km
+}
+
+
+function haversine2(A , B)
+{	
+	var lat1 = A.Xa*0.017453292519943295; // to radians
+	var lat2 = B.Xa*0.017453292519943295;
+	var lon1 = A.Ya*0.017453292519943295;
+	var lon2 = B.Ya*0.017453292519943295;
+	
+	var a = (lat1 - lat2) * 6371000;
+	var tmp = Math.abs(lon1 - lon2) * 6371000;
+	var b = Math.cos(lat1) * tmp;
+	var c = Math.cos(lat2) * tmp;
+	
+	return Math.sqrt(c*c-c+b+a*a);
+}
+
+function closestPointOnLine(start, end, point)
+{
+	var cx, cy, ax, ay, bx ,by, len, dx, dy;
+	//var resx, resy;
+	cx = point.Xa;
+	cy = point.Ya;
+	ax = start.Xa;
+	ay = start.Ya;
+	bx = end.Xa;
+	by = end.Ya;
+	
+	dx = bx - ax;
+	dy = by - ay;
+	
+	var len_sqr = dx*dx+dy*dy;
+	
+	var tmp = ((cx-ax)*dx+(cy-ay)*dy) / len_sqr; // (point*(M^-1))[0] /len^2
+	
+	return new google.maps.LatLng(   tmp * (dx) + ax,    tmp * (dy) + ay  );
+}
+
+//function cpol(ax, ay, bx, by, px, py)
+//{
+//	return closestPointOnLine(new google.maps.LatLng(ax,ay), new google.maps.LatLng(bx,by),new google.maps.LatLng(px,py) )
+//}
+
+function segmentCircleIntersect(radius, center, start, end)
+{
+	//if(pointInCircle(radius, center, start)) return true; // case 1 
+	//if(pointInCircle(radius, center, end)) return true; // case 2
+	//// case 3 // closest point (on line) to center is in circle and in segment
+	var cp = closestPointOnLine(start, end, center);
+	return ( (pointInSegment(start, end, cp) && pointInCircle(radius, center, cp)) ||
+			 (pointInCircle(radius, center, start))||
+			 (pointInCircle(radius, center, end)));
+}
+//////////////////
+
+function Address(_address, _radius)
+{
+	//// model-view stuff
+	this.listeners = [];
+	this.container;
+	
+	this.setContainer = function(cont)
+	{
+		this.container = cont;
+	}
+	
+	this.addListener = function(lnr)
+	{
+		this.listeners.push(lnr);
+	}
+	
+	this.cleanupListeners = function()
+	{
+		for(var i = 0 ; i < this.listeners.length; i++)
+		{
+			this.listeners[i].cleanup();
+		}
+		this.listeners = [];
+	}
+	
+	this.notifyAll = function()
+	{
+		for(var i = 0 ; i < this.listeners.length; i++)
+		{
+			this.listeners[i].notification();
+		}
+	}	
+	
+	this.setRadius = function(r)
+	{
+		this.radius = r;
+		this.renderCircle();
+		this.notifyAll();
+	}
+	
+	this.cleanup = function()
+	{
+		this.cleanupListeners();
+		
+		if(this.container != null) this.container.remove(this); // remove me from container
+		
+		if(this.gcirc != null) this.gcirc.setMap(null);
+		if(this.infowindow != null) this.infowindow.open(null);
+	}
+	/////
+
+	this.address = _address,
+	this.descriprion = "dessss",
+	this.coord, // latLng
+	this.radius = (_radius != null)?(_radius):200,
+	this.circleon, // bool
+	this.markeron,
+	this.circle,
+	this.gcirc,
+	this.success = false;
+	
+	this.circleditable = false;
+	this.celistener;
+	
+	this.circleevent;
+	
+	this.color = rcol();
+	
+	this.infowindow;
+	
+	this.geocodefails = false;
+	
+	this.toggleEditCircle = function()
+	{
+		this.gcirc.setEditable( !(this.gcirc.getEditable()));
+		if(this.gcirc.getEditable())
+		{
+			this.celistener = google.maps.event.addListener(this.gcirc, 'radius_changed', $.proxy(this, 'radiusChanged'));
+		}
+		else
+		{
+			google.maps.event.removeListener( this.celistener );
+		}
+		this.renderCircle();
+	}
+	
+	this.radiusChanged = function()
+	{
+		//this.gcirc.setRadius(Math.round(this.gcirc.getRadius()));
+		this.radius = Math.round(this.gcirc.getRadius());
+		this.notifyAll();
+	}
+	
+	this.isSelectedByUser = function()
+	{
+		return (this.infowindow != null) && (this.infowindow.getMap() != null);
+	}
+	
+	this.showHint = function()
+	{
+		if((this.infowindow != null) && (this.infowindow.getMap() != null)) 
+		{
+			this.infowindow.open(null);
+			this.notifyAll();
+			return;
+		}
+		
+		var str = "<b>".concat(this.address,"</b><p>radius: ", this.radius.toString());
+		
+		this.infowindow = new google.maps.InfoWindow({
+			content: str,
+			position: this.coord
+		});
+		this.infowindow.open(map);
+		this.notifyAll();
+	}
+	
+	this.obtainCoord = function(results, status) {
+      if (status == google.maps.GeocoderStatus.OK) {
+		  
+        this.coord = results[0].geometry.location;
+        
+        this.renderCircle();
+        
+        this.success = true;
+        
+        
+      } else {
+        this.geocodefails = true;
+        this.cleanup();
+        alert("Geocode was not successful for the following reason: " + status + "; " + this.address);
+      }
+    }
+	
+	
+	///// obtain latlng point
+	geocoder.geocode.call(this,  { 'address': _address}, $.proxy(this, "obtainCoord"));
+	
+	
+	this.getCircle = function()
+	{
+		//if(circle != null) return circle;
+		var circle = {
+			strokeColor: "#000",
+			strokeOpacity: 0.8,
+			strokeWeight: 2,
+			fillColor: this.color,
+			fillOpacity: 0.35,
+			map: map,
+			center: this.coord,
+			radius:this.radius,
+			editable: (this.gcirc!=null)?(this.gcirc.getEditable()):(false)
+		};
+		
+		return circle;
+	}
+	
+	this.renderCircle = function()
+	{
+		//if(this.gcirc != null) this.gcirc.setMap(null);
+		if(this.gcirc == null) 
+		{
+			this.gcirc = new google.maps.Circle(this.getCircle());
+			google.maps.event.addListener(this.gcirc, 'click', $.proxy(this, 'showHint'));
+		}
+		else
+		{
+			this.gcirc.setOptions(this.getCircle());
+		}
+		
+	}
+	
+	this.intersectRoute = function(route) // better implement on server
+	{
+		var cir = this.getCircle();
+		for(var i = 1; i < route.points.length; i++)
+		{
+			if(segmentCircleIntersect(cir.radius, cir.center, route.points[i-1] ,route.points[i]))
+				return true;
+		}
+		return false;
+	}
+	
+
+	
+}
+
+
+function AddressView(_address, _parentnode/*not required*/) // HTML node
+{
+	this.address = _address;
+	this.parentnode = _parentnode;
+	
+	_address.addListener(this);
+	
+	this.showHint = function()
+	{
+		this.address.showHint(); // sets userselected
+	}
+	
+	this.remove = function()
+	{
+		this.address.cleanup();
+	}
+	
+	this.editRadius = function()
+	{
+		this.update();
+		this.address.toggleEditCircle();
+		//make circke editable
+	}
+	
+	this.setRadius = function(rad)
+	{
+		if((rad == "") || (Number(rad) == 0)) return; // othervise model sets "0" instead of "" or "000"
+		
+		this.address.setRadius(Number(rad));
+	}
+	
+	this.update = function()
+	{
+		getFirstByTN(this.node, 'input').value = this.address.radius.toString();
+		// update user active , change back color
+		this.node.className = (this.address.isSelectedByUser())?("userselected"):(null);
+	}
+	
+	this.cleanup = function()
+	{
+		this.node.parentNode.removeChild(this.node);
+	}
+	
+	this.notification = function()
+	{
+		this.update();
+	}
+	
+	
+	
+	this.node = newAddressWidget(	this.address.address,
+	
+									$.proxy(this, 'showHint'),
+									
+									$.proxy(this, 'remove'),
+									
+									$.proxy(this, 'editRadius'),
+									
+									$.proxy(this, 'setRadius'),
+									
+									$.proxy(this, 'setRadius'),
+								
+									'imgf.png');
+								
+}
+
+///////////////////////////
+/////// routes addresses collection
+///////////////////////////
+
+//// my widgets
+
+function boldTextClickable(_model, text, callback, getActive_func)
+{
+	
+	this.model = _model;
+	this.gaf = getActive_func; // to obtain state from model
+	
+	this.span = newElement('span');
+	this.span.onclick = callback;
+	this.span.appendChild(newElement('b', text));
+	this.span.className = this.gaf(this.model) ? "userselected" : null;
+
+	this.model.addListener(this);
+	
+	this.getNode = function()
+	{
+		return this.span;
+	}
+	
+	this.cleanup = function() // removes its parent
+	{
+		this.span.parentNode.parentNode.removeChild(this.span.parentNode);
+	}
+	
+	this.notification = function()
+	{
+		this.span.className = this.gaf(this.model) ? "userselected" : null;
+	}
+}
+
+function textClickable(_model, text, callback, getActive_func)
+{
+	
+	this.model = _model;
+	this.gaf = getActive_func; // to obtain state from model
+	
+	this.span = newElement('span');
+	this.span.onclick = callback;
+	this.span.innerHTML = text;
+	this.span.className = this.gaf(this.model) ? "userselected" : null;
+
+	this.model.addListener(this);
+	
+	this.getNode = function()
+	{
+		return this.span;
+	}
+	
+	this.cleanup = function()
+	{
+		this.span.parentNode.removeChild(this.span);
+	}
+	
+	this.notification = function()
+	{
+		this.span.className = this.gaf(this.model) ? "userselected" : null;
+	}
+}
+
+
+
+function newElement(tag, innerhtml)
+{
+	var el = document.createElement(tag);
+	if(innerhtml != null) el.innerHTML = innerhtml;
+	return el;
+}
+
+function newBoldTextClickable(text, callback, arg1, arg2)
+{
+	var span = newElement('span');
+		span.onclick = (function()
+								{
+									callback(arg1, arg2);
+								});
+		span.appendChild(newElement('b', text));
+	return span;
+}
+
+function newTextClickable(text, callback, arg1, arg2)
+{
+	var span = newElement('span', text);
+		span.className = "clickabletext";
+		span.onclick = (function()
+								{
+									callback(arg1, arg2);
+								});
+	return span;
+}
+
+function getById(id)
+{
+	return document.getElementById(id);
+}
+
+function getFirstByTN(node, tname)
+{
+	return node.getElementsByTagName(tname)[0];
+}
+
+function newButton(text, callback)
+{
+	var button = newElement('button');
+	button.onclick = callback;
+	button.innerHTML = text;
+	return button;
+}
+
+function newInputButton(text, idx /*!!!!!!!!*/, callback)
+{
+	var span = newElement('span');
+	var input = newElement('input');
+	input.type = 'text';
+	//input.id = id;
+	
+	var button = newButton(text, function()
+										{
+											callback(input.value, idx);
+										});
+	span.appendChild(input);
+	span.appendChild(button);
+	span.appendChild(newElement('br'));
+	return span;
+}
+
+function newInputWButton(text1, text2, callback1, callback2)
+{
+	var span = newElement('span');
+	var input = newElement('input');
+	input.type = 'text';
+	
+	var button1 = newButton(text1, function()
+										{
+											callback1(input.value);
+										});
+										
+	var button2 = newButton(text2, function()
+										{
+											callback2(input.value);
+										});
+										
+	span.appendChild(input);
+	span.appendChild(button1);
+	span.appendChild(button2);
+	span.appendChild(newElement('br'));
+	return span;
+}
+
+function newEditButton(text, callback_ed, callback_apply)
+{
+	var span = newElement('span');
+	var input = newElement('input');
+	input.type = 'text';
+	
+	input.oninput = function()
+										{
+											callback_ed(input.value);
+										}
+	//input.id = id;
+	
+	var button = newButton(text, function()
+										{
+											callback_apply(input.value);
+										});
+	span.appendChild(input);
+	span.appendChild(button);
+	span.appendChild(newElement('br'));
+	return span;
+}
+
+function newImgCheckButton(checked, text ,idx, callback, imgt, imgf)
+{
+	var span = newElement('span');
+		//span.checked = checked;
+		
+	var img = newElement('img');
+		img.src = (checked)?(imgt):(imgf);
+		img.checked = checked;
+		img.idx = idx;
+		img.onclick = function()
+							{
+								img.checked = !img.checked;
+								img.src = (img.checked)?(imgt):(imgf);
+								callback(img.checked, /*img.*/idx);
+							}
+		
+	var textfield = newElement('span');
+		textfield.innerHTML = text;
+		
+	span.appendChild(img);
+	span.appendChild(textfield);
+	span.appendChild(newElement('br'));
+	return span;
+}
+//////////////////////
+
+
+
+
+function wImgCheckButton(text , callback1, callback2, callback_text, img1, img2)
+{
+	this.span = newElement('span');
+		//span.checked = checked;
+		
+	this.img1 = newElement('img');
+	this.img1.src = img1;
+	this.img1.onclick = callback1;
+							
+	this.img2 = newElement('img');
+	this.img2.src = img2;
+	this.img2.onclick = callback2;
+		
+	this.textfield = newElement('span');
+	this.textfield.innerHTML = text;
+	this.textfield.className = "clickabletext";
+	this.textfield.onclick = callback_text;
+	
+	this.span.appendChild(this.img1);
+	this.span.appendChild(this.img2);
+	this.span.appendChild(this.textfield);
+	this.span.appendChild(newElement('br'));
+	
+	this.setUserSelected = function()
+	{
+		this.span.className = userselected;
+	}
+	
+	this.setImg1 = function(img)
+	{
+		this.img1.src = img;
+	}
+	
+	this.setImg2 = function(img)
+	{
+		this.img2.src = img;
+	}
+	
+	this.getNode = function()
+	{
+		return this.span;
+	}
+} 
+/////////////////
+function newAnchor(text, callback)
+{
+	var anch = newElement('a');
+	anch.onclick = callback;
+	anch.innerHTML = text;
+	anch.href = "javascript:";
+	return anch;
+}
+
+function newToggleDiv(text, child1, child2)
+{
+	var div = newElement('div');
+		div.show_first = true;
+	
+	var anch = newAnchor(text, $.proxy(function(){
+													div.show_first = !div.show_first;
+													if(div.show_first)
+													{
+														$(child1).show(300);
+														$(child2).hide(300);
+													}
+													else
+													{
+														$(child2).show(300);
+														$(child1).hide(300);
+													}
+												}, this));
+												
+	div.appendChild(anch);
+	div.appendChild(child1);
+	div.appendChild(child2);
+	
+	//$(child1).show(300);
+	//$(child2).hide(300);
+	child2.hidden = true;
+	
+	return div;
+}
+
+
+function newWImgCheckButton(checked1, checked2, text ,idx, callback1, callback2, imgt1, imgf1, imgt2, imgf2)
+{
+	var span = newElement('span');
+		//span.checked = checked;
+		
+	var img1 = newElement('img');
+		img1.src = (checked1)?(imgt1):(imgf1);
+		img1.checked = checked1;
+		img1.idx = idx;
+		img1.onclick = function()
+							{
+								img1.checked = !img1.checked;
+								img1.src = (img1.checked)?(imgt1):(imgf1);
+								callback1(img1.checked, /*img.*/idx);
+							}
+							
+	var img2 = newElement('img');
+		img2.src = (checked2)?(imgt2):(imgf2);
+		img2.checked = checked2;
+		img2.idx = idx;
+		img2.onclick = function()
+							{
+								img2.checked = !img2.checked;
+								img2.src = (img2.checked)?(imgt2):(imgf2);
+								callback2(img2.checked, /*img.*/idx);
+							}
+		
+	var textfield = newElement('span');
+		textfield.innerHTML = text;
+		
+	span.appendChild(img1);
+	span.appendChild(img2);
+	span.appendChild(textfield);
+	span.appendChild(newElement('br'));
+	return span;
+}
+
+function newAddressWidget(text, callback_hint, callback_del, callback_cr, callback_ed, callback_apply,  imgf)
+{
+	var span = newElement('span');
+	var tb = newTextImgButton(text, 0, callback_del, callback_hint, imgf);
+	
+	var er = newEditButton('apply',callback_ed,callback_apply);
+		er.hidden = true;
+		span.callback_cr = callback_cr;
+	var anch = newAnchor('edit radius', $.proxy(function()
+											{
+												span.callback_cr();
+												
+												er.hidden = !er.hidden;
+												if(er.hidden)
+												{
+													$(er).$.hide(500);
+												}
+												else
+												{
+													$(er).$.show(500);
+												}
+											}, this));
+	
+	span.appendChild(tb);
+	span.appendChild(anch);
+	span.appendChild(er);
+	span.appendChild(newElement('br'));
+	return span;
+}
+
+
+
+function newTextImgButton(text, idx,callback_img, callback_text,  imgf)
+{
+	var span = newElement('span');
+		span.className = "clickabletext";
+	var img = newElement('img');
+		img.src = imgf;
+		img.onclick = function()
+							{
+								callback_img(idx);
+							}
+	var textfield = newElement('span');
+		textfield.innerHTML = text;
+		textfield.onclick = callback_text;
+	span.appendChild(textfield);
+	span.appendChild(img);
+	span.appendChild(newElement('br'));
+	return span;
+}
+
+
+function newTimeout(ms, callback, arg)
+{
+	//this.ms = ms,
+	this.callback = callback,
+	this.arg = arg,
+	
+	this.fire = function()
+	{
+		this.callback(this.arg);
+	}
+	
+	setTimeout($.proxy(this,'fire'), ms);
+}
+///////////////////////////
+///////////////////////////
+
+function RoutesAddr()
+{
+	
+	this.addressesContainer = new MVContainer(function(_m) // get key
+													{
+														return _m.address;
+													});
+													
+	this.routesContainer = new MVContainer(function(_m) // get key
+													{
+														return _m.name;
+													});
+	
+	this.routnode;
+	this.addrnode;
+	this.panelnode;
+	this.tablenode;
+	
+	this.sel_rts; // selected routes string;
+	
+	this.default_radius = 300;
+	
+	
+	this.imatrix; // by routes
+	this.jmatrix; // by addresses
+	
+	this.addRoute = function(route)
+	{
+		var rtnode = new RouteView(route);
+		this.routnode.appendChild(rtnode.node.getNode());
+		this.routesContainer.add(route, rtnode);
+	}
+
+	this.addSingleAddress = function(addr)
+	{
+
+		var newadr = new Address(addr);
+		
+		if(newadr.geocodefails) return;
+		
+		var adrnode = new AddressView(newadr);
+		this.addrnode.appendChild(adrnode.node);
+		
+		this.addressesContainer.add(newadr, adrnode);
+	}
+
+	this.addAddress = function(addr)
+	{
+		var addr_tmp = addr.split(';');
+		for(var i = 0 ; i < addr_tmp.length; i++)
+		{
+			/////////// delay prevent google geolocator error (too fast...)
+			var to = new newTimeout(i*500, $.proxy(this, 'addSingleAddress'), addr_tmp[i]);
+		}
+	}
+	
+	this.setRoutesNode = function(node)
+	{
+		this.routnode = node;
+	}
+	
+	this.setAddressesNode = function(node)
+	{
+		this.addrnode = node;
+	}
+	
+	this.selecRoutesByCSV = function(val)
+	{
+		//alert("csv".concat(val));
+		var rt_arr = val.split(";");
+		var key;
+		for(var i = 0 ; i < rt_arr.length ; i++)
+		{
+			key = rt_arr[i].replace(/\s/g, '');
+			if(key == "") continue;
+			this.routesContainer.getModel(key).setSelected(true);
+		}
+	}
+	
+	this.updatePanelView = function() // draw panel with buttons ect.
+	{
+		if(this.panelnode != null)
+		{
+			this.panelnode.innerHTML = "";
+			
+			this.panelnode.appendChild(newInputButton("append address list", "ololo", $.proxy(this, 'addAddress')));
+			
+			this.panelnode.appendChild(newInputButton("set default radius", "olol", $.proxy(this, 'defaultRadius')));
+			
+			this.panelnode.appendChild(newButton("compute intersections",$.proxy(this, 'fillRouteTable') ));
+			
+			 var tars = (newWImgCheckButton(true, true, "[ALL ROUTES]", 0, $.proxy(this, 'toggleAllRoutesSelected'),$.proxy(this, 'toggleAllRoutesVisible'), 'check.png','notcheck.png','visible.png','invisible.png'));
+			
+			 var raa =(newTextImgButton("[ALL ADDRESSES]", 0, $.proxy(this, 'removeAllAddresses'), null, "imgf.png"));
+			
+			
+			
+			this.sel_rts = newInputWButton("set selected routes", "get selected routes" , $.proxy(this, 'selecRoutesByCSV'), $.proxy(function()
+																																		{
+																																			this.sel_rts.getElementsByTagName("input")[0].value = "";
+																																			this.routesContainer.forEachModel(function(m, input)
+																																				{
+																																					if(m.isSelected()) input.value = input.value.concat(m.name,"; ");
+																																				}, this.sel_rts.getElementsByTagName("input")[0]);
+																																		},this));
+			
+			var table = newElement("table");
+			var tr = newElement("tr");
+			var td1 = newElement("td");
+			var td2 = newElement("td");
+			
+			td1.appendChild(tars);
+			td2.appendChild(raa);
+			
+			tr.appendChild(td1);
+			tr.appendChild(td2);
+			
+			table.appendChild(tr);
+			
+			this.panelnode.appendChild(table);
+			
+			
+			
+			
+			this.panelnode.appendChild(newToggleDiv("show/hide routes input" , newElement("span"),this.sel_rts));
+		}
+	}
+	
+	this.toggleAllRoutesSelected = function(selected)
+	{
+		this.routesContainer.forEachModel(function(_m, _s)
+											{
+												_m.setSelected(_s);
+											}, selected);
+	}
+	
+	this.toggleAllRoutesVisible = function(visible)
+	{
+		this.routesContainer.forEachModel(function(_m, _v)
+											{
+												_m.setVisible(_v);
+											}, visible);
+	}
+	
+	this.removeAllAddresses = function()
+	{
+		this.addressesContainer.forEachModel(function(_m)
+										{
+											_m.cleanup();
+										});
+	}
+	
+	this.defaultRadius = function(rad)
+	{
+		var r = Number(rad)
+		this.default_radius = r;
+		this.addressesContainer.forEachModel(function(_m, _r)
+												{
+													_m.setRadius(_r);
+												}, this.default_radius );
+	}
+	
+	this.setPanelNode = function(node)
+	{
+		this.panelnode = node;
+	}
+	
+	this.showRoutes = function(flag)
+	{
+		this.routesContainer.forEachModel(function(_m)
+												{
+													_m.renderRoute();
+												});
+	}
+	
+	this.updateView = function()
+	{
+	
+		this.updatePanelView();
+		this.updateTableView();
+		
+		
+		this.showRoutes();
+	}
+	
+	this.setTableNode = function(node)
+	{
+			this.tablenode = node;
+	}
+	
+	this.updateTableView = function()
+	{
+		if(this.imatrix == null) return;
+		if(this.jmatrix == null) return;
+		if(this.tablenode == null) return;
+		
+		this.tablenode.innerHTML = "";
+		
+		
+		
+		////// routes section
+		var rt_div = newElement('div');
+		
+		this.imatrix.sort(function(a,b)
+							{
+								return b.length - a.length;
+							});
+		
+		for(var i = 0 ; i < this.imatrix.length; i++)
+		{
+			if(this.imatrix[i].length == 0 ) continue;
+			
+			var rt = new boldTextClickable(this.imatrix[i][0], 
+										this.imatrix[i][0].name.concat(" : "), 
+										$.proxy(this.imatrix[i][0], 'toggleVisible'), 
+										function(_m) {
+											return _m.isVisible();
+										});
+			
+			var row = newElement("div");
+			
+			row.appendChild(rt.getNode());
+			
+			for(var j = 1; j < this.imatrix[i].length; j++)
+			{
+				var tx = new textClickable(this.imatrix[i][j], 
+										this.imatrix[i][j].address.concat("; "), 
+										$.proxy(this.imatrix[i][j], 'showHint'), 
+										function(_m) {
+											return _m.isSelectedByUser();
+										});
+				
+				row.appendChild(tx.getNode());
+				
+			}
+			
+			
+			
+			rt_div.appendChild(row);
+		}
+		////// addr section
+		var ad_div = newElement('div');
+		
+		this.jmatrix.sort(function(a,b)
+							{
+								return b.length - a.length;
+							});
+							
+		for(var i = 0 ; i < this.jmatrix.length; i++)
+		{
+			if(this.jmatrix[i].length == 0 ) continue;
+			
+			//var res = this.jmatrix[i][0].concat(" : ");
+			
+			var adr = new boldTextClickable(this.jmatrix[i][0], 
+										this.jmatrix[i][0].address.concat(" : "), 
+										$.proxy(this.jmatrix[i][0], 'showHint'), 
+										function(_m) {
+											return _m.isSelectedByUser();
+										});
+			
+			var row = newElement("div");
+			
+			row.appendChild(adr.getNode());
+			
+			for(var j = 1; j < this.jmatrix[i].length; j++)
+			{
+				var tx = new textClickable(this.jmatrix[i][j], 
+										this.jmatrix[i][j].name.concat("; "), 
+										$.proxy(this.jmatrix[i][j], 'toggleVisible'), 
+										function(_m) {
+											return _m.isVisible();
+										});
+				
+				row.appendChild(tx.getNode());
+			}
+			
+			ad_div.appendChild(row);
+		}
+		
+		/////
+		this.tablenode.appendChild(newToggleDiv("toggle route/address", rt_div, ad_div));
+		//this.tablenode.appendChild(ad_div);
+	}
+	
+	
+	this.addresses;
+	this.routes;
+	
+	this.fillRouteTable = function()
+	{
+		this.addresses = this.addressesContainer.getModelArray();
+		this.routes = this.routesContainer.getModelArray();
+		
+		//var start = new Date().getTime();
+		
+		/// first elem. in subarray is a key in <b> tag (route or address)
+		this.imatrix = new Array(); // i routes; j addr
+		this.jmatrix = new Array(); // i addr j rout
+		
+		//for(j = 0 ; j < this.routes.length; j++)
+		//{		
+		//	this.routes[j].setVisible(false);
+		//}
+		
+		this.routesContainer.forEachModel(function(m,v){m.setVisible(v)}, false);
+
+		for(j = 0 ; j < this.addresses.length; j++)
+		{		
+			this.jmatrix.push(new Array());
+			if(this.addresses[j].success) this.jmatrix[j].push(this.addresses[j]);
+		}
+
+		
+		for(i = 0; i < this.routes.length; i++)
+		{
+			this.imatrix.push(new Array()); // vector for all addr
+			//
+			if(!(this.routes[i].selected)) continue;
+			
+			this.imatrix[this.imatrix.length - 1].push(this.routes[i]);
+			
+			for(j = 0 ; j < this.addresses.length; j++)
+			{
+				if(!(this.addresses[j].success)) continue;
+					
+				if(this.addresses[j].intersectRoute(this.routes[i]))
+				{
+					
+					this.routes[i].setVisible(true);
+					
+					this.jmatrix[j].push(this.routes[i]);
+					this.imatrix[i].push(this.addresses[j]);
+				}
+			}
+			
+		}
+		
+		//var elapsed = 0.001 * (new Date().getTime() - start);
+		
+		//alert("total time: "+elapsed.toString());
+		
+		//this.updateTableView();
+		this.updateView();
+	}
+}
+
+///////////////////////////
+///////////////////////////
+///////////////////////////
+      
+      
+      var ra = new RoutesAddr();
+      
+      //asdfasdfasdfasdfasd
+      //asdfasdfasdfasd       !!!!!INIT!!!!!!!!
+      //asdfasdfasdf
+      function pabeg() 
+      {
+			ra.setTableNode(getById("tab"));
+			ra.setPanelNode(getById('pain'));
+			ra.setRoutesNode(getById('rts'));
+			ra.setAddressesNode(getById('adddr'))
+	  
+	  		
+		  var eway_r = $.parseJSON(jsstr);
+			var wiki_r = $.parseJSON(jsstr2);
+
+			var rtsss = eway_r.concat(wiki_r); 
+		
+
+			for(var i =0; i < rtsss.length; i++)
+			{
+				var points = [];
+				
+				for(var j = 0 ; j < rtsss[i].points.length; j++)
+				{
+					points.push(new google.maps.LatLng(rtsss[i].points[j].Xa,rtsss[i].points[j].Ya));
+				}
+				
+				ra.addRoute(new Route(rtsss[i].name, points , rtsss[i].color));
+			}
+		  
+		  
+			
+			ra.updateView();
+				
+	
+	}
+      
+    </script>
+  </head>
+  <body onload="initialize()">
+	  
+
+		<div id="map_canvas" style="float:left;width:50%; height:100%;position:relative"></div>
+
+        <div style="float:right;width:50%;height:100%;">
+			
+
+			<div id="tab" style="float:left;width:100%;height:38%;overflow:auto;font-size: 0.8em;border:1px solid #ccc"></div>
+        
+		
+			<div id="pain" style="float:left;width:100%;height:18%;overflow:auto;font-size: 0.8em;border:1px solid #ccc"></div>
+			<div id="rts" style="float:left;width:49%;height:44%;overflow:auto;font-size: 0.8em;border:1px solid #ccc"></div>
+			<div id="adddr" style="float:right;width:49%;height:44%;overflow:auto;font-size: 0.8em;border:1px solid #ccc"></div>
+			
+        
+        </div>
+
+    
+ 
+    
+</table>
+
+  </body>
+</html>

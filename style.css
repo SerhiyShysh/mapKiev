@@ -1,0 +1,14 @@
+.a_userselected {
+	background-color:yellow;
+}
+
+.userselected {
+	background-color:yellow;
+}
+
+.p_userselected {
+	background-color:cyan;
+}
+.clickabletext {
+	cursor: pointer;
+}
